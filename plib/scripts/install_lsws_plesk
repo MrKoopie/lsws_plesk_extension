@@ -1,0 +1,190 @@
+#!/bin/sh
+
+##########################################################
+# LiteSpeed Web Server Plugin for Plesk Panel
+# @Author:   LiteSpeed Technologies, Inc. (http://www.litespeedtech.com)
+# @Copyright: (c) 2013-2014
+##########################################################
+
+check_errs()
+{
+  if [ "${1}" -ne "0" ] ; then
+    echo "**ERROR** ${2}" 
+    exit ${1}
+  fi
+}
+
+if [ $# -ne 9 ] ; then
+    check_errs 1 "Illegal parameters = $# !"
+fi
+
+WGET_TEMP=/usr/src/lsws
+LSWS_HOME=$1
+SERIAL=$2
+PORT_OFFSET=$3
+PHP_SUEXEC=$4
+ADMIN_LOGIN=$5
+ADMIN_PASS=$6
+ADMIN_EMAIL=$7
+LSPHP=$8
+RPMREPO=$9
+
+CUR_DIR=`pwd`
+SCRIPT_DIR=`dirname "$0"`
+PF=`uname -p`
+OS=`uname -s`
+
+
+echo "... Detecting platform ..."
+
+if [ "x$OS" = "xFreeBSD" ]; then
+    if [ "x$PF" = "xi386" ]; then
+	PLATFORM="-i386-freebsd6"
+    elif [ "x$PF" = "xamd64" ]; then
+	PLATFORM="-x86_64-freebsd6"
+    else
+	check_errs 1 "unkown platform '$PL' for FreeBSD."
+    fi
+elif [ "x$OS" = "xSunOS" ]; then
+    if [ "x$PF" = "xi386" ]; then
+	BITS=`isainfo -b`
+	if [ "x$BITS" = "x64" ]; then
+	    PLATFORM="-x86_64-solaris"
+	else
+	    PLATFORM="-i386-solaris"
+	fi
+    else
+	check_errs 1 "unkown platform '$PL' for Sun Solaris."
+    fi
+elif [ "x$OS" = "xLinux" ]; then
+    PF=`uname -m`
+    if [ "x$PF" = "xi686" ] || [ "x$PF" = "xi586" ] || [ "x$PF" = "xi486" ] || [ "x$PF" = "xi386" ]; then
+	PLATFORM="-i386-linux"
+    elif [ "x$PF" = "xx86_64" ]; then
+	PLATFORM="-x86_64-linux"
+    else
+	check_errs 1 "unkown platform '$PL' for Linux."
+    fi
+fi
+
+echo "Platform is $PLATFORM"
+echo ""
+
+#latest version from wget
+
+echo "... Query latest release version ..."
+
+DOWNLOAD_URL="http://update.litespeedtech.com/ws/latest.php"
+
+if [ ${OS} = "FreeBSD" ]; then
+    REL_VERSION=`fetch -q -o - $DOWNLOAD_URL`
+else
+    REL_VERSION=`wget -q --output-document=- $DOWNLOAD_URL`
+fi
+
+REL_VERSION=`expr "$REL_VERSION" : '.*LSWS=\([0-9\.]*\)'`
+
+if [ "x$REL_VERSION" = "x" ] ; then
+	check_errs 1 "Failed to retrieve the lastest version." 
+fi
+
+echo "Lastest version is $REL_VERSION"
+echo ""
+ 
+MAJOR_VERSION=`expr $REL_VERSION : '\([0-9]*\)\..*'`
+LOCAL_DIR="lsws-$REL_VERSION"
+ 
+# http://www.litespeedtech.com/packages/3.0/lsws-3.3.12-ent-i386-linux.tar.gz
+DOWNLOAD_URL="http://www.litespeedtech.com/packages/$MAJOR_VERSION.0/lsws-$REL_VERSION-ent$PLATFORM.tar.gz"
+
+if [ ! -d "$WGET_TEMP" ] ; then
+    mkdir -v -p "$WGET_TEMP"
+    check_errs $? "error when creating downloading directory ... abort!"
+    echo "  Download directory created"
+fi
+
+if [ ! -e "$WGET_TEMP/$LOCAL_DIR.tar.gz" ]; then
+
+    echo "... Downloading ... $DOWNLOAD_URL"
+    
+    if [ ${OS} = "FreeBSD" ]; then
+        fetch -q -o $WGET_TEMP/$LOCAL_DIR.tar.gz $DOWNLOAD_URL
+    else
+        wget -q --output-document=$WGET_TEMP/$LOCAL_DIR.tar.gz $DOWNLOAD_URL
+    fi
+    check_errs $? "error when downloading ... abort!"
+
+    echo "Download finished successfully"
+else
+    echo "Package already downloaded, ready to install"
+fi
+
+
+# Extracts the files
+cd "$WGET_TEMP/"
+echo "... Extracting... tar -zxf $WGET_TEMP/$LOCAL_DIR.tar.gz"
+
+if [ -e "$WGET_TEMP/$LOCAL_DIR" ]; then
+    /bin/rm -rf "$WGET_TEMP/$LOCAL_DIR"
+fi
+
+tar -zxf "$WGET_TEMP/$LOCAL_DIR.tar.gz"
+check_errs $? "Could not extract $LOCAL_DIR.tar.gz"
+
+#Moves files
+echo "... Moving files..."
+cp "$SCRIPT_DIR/pleskInstall.sh" "$WGET_TEMP/$LOCAL_DIR/"
+
+if [ "$SERIAL" = "TRIAL" ]; then
+    if [ ${OS} = "FreeBSD" ]; then
+        fetch -q -o $WGET_TEMP/$LOCAL_DIR/trial.key http://license.litespeedtech.com/reseller/trial.key
+    else
+        wget -q --output-document=$WGET_TEMP/$LOCAL_DIR/trial.key http://license.litespeedtech.com/reseller/trial.key
+    fi
+else
+    echo "$SERIAL" > "$WGET_TEMP/$LOCAL_DIR/serial.no"
+fi
+
+echo ""
+
+echo "Prepare Installing ..."
+
+echo "
+    LSWS_HOME=$LSWS_HOME
+    PORT_OFFSET=$PORT_OFFSET
+    PHP_SUEXEC=$PHP_SUEXEC
+    ADMIN_LOGIN=$ADMIN_LOGIN
+    "
+
+cd "$WGET_TEMP/$LOCAL_DIR/"
+sh ./pleskInstall.sh $LSWS_HOME $PORT_OFFSET $PHP_SUEXEC "$ADMIN_LOGIN" "$ADMIN_PASS" "$ADMIN_EMAIL" 2>&1
+check_errs $? "Failed to install, abort!"
+
+if [ "x$RPMREPO" != "x" ] ; then
+    rpm -ivh $RPMREPO 2>&1
+    yum -y install $LSPHP 2>&1
+    yum -y install $LSPHP-common $LSPHP-mysql $LSPHP-mcrypt $LSPHP-xml $LSPHP-gd $LSPHP-pdo $LSPHP-soap $LSPHP-mbstring $LSPHP-process $LSPHP-imap $LSPHP-bcmath $LSPHP-intl --skip-broken 2>&1
+    #yum -y install $LSPHP-* --skip-broken 2>&1
+
+    if [ -e "/usr/local/lsws/$LSPHP/bin/lsphp" ] ; then
+        echo "Installed $LSPHP from rpm repository $RPMREPO"
+        ln -sf /usr/local/lsws/$LSPHP/bin/lsphp $LSWS_HOME/fcgi-bin/$LSPHP
+        ln -sf $LSWS_HOME/fcgi-bin/$LSPHP $LSWS_HOME/fcgi-bin/lsphp5
+    else
+        check_errs 1 "Failed to install $LSPHP from rpm repository $RPMREPO"
+    fi
+fi
+
+if [ -f "/etc/cagefs/cagefs.mp" ] ; then
+# cagefs installed first, need update mount point
+    cagefsctl --create-mp
+    cagefsctl --remount-all
+    cagefsctl --update
+fi
+
+
+echo "**COMPLETE**"
+
+exit 0
+
+

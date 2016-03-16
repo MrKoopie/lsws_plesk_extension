@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module>
+  <id>litespeed</id>
+  <name>LiteSpeed Extension</name>
+  <description>Install/Manage LiteSpeed Web Server from your Plesk panel.</description>
+  <version>1.2.4</version>
+  <release>3</release>
+  <vendor>LiteSpeed Technologies Inc.</vendor>
+  <url>https://www.litespeedtech.com</url>
+  <plesk_min_version>11.5.0</plesk_min_version>
+  <help_url>https://www.litespeedtech.com/support/wiki/doku.php/litespeed_wiki:plesk</help_url>
+  <os>unix</os>
+</module>

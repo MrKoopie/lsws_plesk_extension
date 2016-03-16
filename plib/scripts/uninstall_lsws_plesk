@@ -1,0 +1,117 @@
+#!/bin/sh
+
+##########################################################
+# LiteSpeed Web Server Plugin for Plesk Panel
+# @Author:   LiteSpeed Technologies, Inc. (http://www.litespeedtech.com)
+# @Copyright: (c) 2013-2014
+##########################################################
+
+BASE_DIR=$1  ## LSWS_HOME
+KEEP_CONF=$2
+KEEP_LOG=$3
+
+if [ "x$BASE_DIR" = "x" ]; then
+    echo "[ERROR] Invalid parameter 1!"
+    exit 1
+fi
+
+if [ "x$KEEP_CONF" != "xY" ] && [ "x$KEEP_CONF" != "xN" ] ; then
+    echo "[ERROR] Invalid parameter 3!"
+    exit 1
+fi
+
+if [ "x$KEEP_LOG" != "xY" ] && [ "x$KEEP_LOG" != "xN" ] ; then
+    echo "[ERROR] Invalid parameter 4!"
+    exit 1
+fi
+
+CUR_DIR=`pwd`
+LSINSTALL_DIR=$BASE_DIR/admin/misc
+
+if [ ! -d "$LSINSTALL_DIR" ]; then
+    echo "[ERROR] Invalid parameter 1!"
+    exit 1
+fi
+
+PIDFILE=/tmp/lshttpd/lshttpd.pid
+
+INST_USER=`id`
+INST_USER=`expr "$INST_USER" : 'uid=.*(\(.*\)) gid=.*'`
+if [ "x$INST_USER" != "xroot" ]; then
+	DIR_OWN=`ls -ld $BASE_DIR | awk '{print $3}'`
+	if [ "x$DIR_OWN" != "x$INST_USER" ]; then
+		echo "[ERROR] You do not have the permission to uninstall LiteSpeed web server!"
+		exit 1
+	fi
+fi
+
+if [ "x$INST_USER" = "xroot" ]; then
+	echo ""
+	echo "Uninstalling rc scripts ..."
+	$LSINSTALL_DIR/rc-uninst.sh
+	echo ""
+fi
+
+DELETE_ALL=1
+
+if [ $KEEP_CONF != "Y" ] ; then
+    rm -rf $BASE_DIR/conf
+    echo "removed $BASE_DIR/conf"
+else
+    DELETE_ALL=0
+    echo "keep $BASE_DIR/conf untouched"
+fi
+
+if [ $KEEP_LOG != "Y" ] ; then
+    rm -rf $BASE_DIR/logs
+    echo "removed $BASE_DIR/logs"
+else
+    DELETE_ALL=0
+    echo "keep $BASE_DIR/logs untouched"
+fi
+
+
+rm -rf $BASE_DIR/add-ons
+echo "removed $BASE_DIR/add-ons"
+rm -rf $BASE_DIR/admin
+echo "removed $BASE_DIR/admin"
+rm -rf $BASE_DIR/autoupdate
+echo "removed $BASE_DIR/autoupdate"
+rm -rf $BASE_DIR/bin
+echo "removed $BASE_DIR/bin"
+rm -rf $BASE_DIR/DEFAULT
+echo "removed $BASE_DIR/DEFAULT"
+rm -rf $BASE_DIR/docs
+echo "removed $BASE_DIR/docs"
+rm -rf $BASE_DIR/fcgi-bin
+echo "removed $BASE_DIR/fcgi-bin"
+rm -rf $BASE_DIR/lib
+echo "removed $BASE_DIR/lib"
+rm -rf $BASE_DIR/php
+echo "removed $BASE_DIR/php"
+rm -rf $BASE_DIR/phpbuild
+echo "removed $BASE_DIR/phpbuild"
+rm -rf $BASE_DIR/share
+echo "removed $BASE_DIR/share"
+rm -rf $BASE_DIR/LICENSE*
+echo "removed $BASE_DIR/LICENSE*"
+rm -rf $BASE_DIR/VERSION
+echo "removed $BASE_DIR/VERSION"
+
+if [ $DELETE_ALL -ne 0 ]; then
+        FILES=`ls $BASE_DIR | wc -l`
+        if [ $FILES -eq 0 ]; then
+              rm -rf $BASE_DIR
+	      echo "$BASE_DIR is empty, deleted."
+	else
+	    echo "$BASE_DIR is not empty, kept there"
+        fi
+else
+    echo "$BASE_DIR is not empty, kept there"
+fi
+
+
+echo "LiteSpeed Web Server has been successfully uninstalled."
+
+
+

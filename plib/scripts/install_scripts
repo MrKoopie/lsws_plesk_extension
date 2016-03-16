@@ -1,0 +1,67 @@
+#!/bin/sh
+
+##########################################################
+# LiteSpeed Web Server Plugin for Plesk Panel
+# @Author:   LiteSpeed Technologies, Inc. (http://www.litespeedtech.com)
+# @Copyright: (c) 2013-2015
+##########################################################
+
+check_errs()
+{
+  if [ "${1}" -ne "0" ] ; then
+    echo "**ERROR** ${2}"
+    exit ${1}
+  fi
+}
+
+# detect PSA_BASE
+if [ -e "/opt/psa/version" ] ; then
+    PSA_BASE="/opt/psa"
+elif [ -e "/usr/local/psa/version" ] ; then
+    PSA_BASE="/usr/local/psa"
+else
+    check_errs 1 "Failed to find the installation directory for psa"
+fi
+
+SCRIPT_DIR=`dirname "$0"`
+PSA_DIR=$PSA_BASE/admin
+MOD_LS=modules/litespeed
+
+mkdir -p $PSA_DIR/sbin/$MOD_LS
+check_errs $? "failed to create dir $PSA_DIR/sbin/$MOD_LS"
+
+mv $SCRIPT_DIR/install_lsws_plesk $PSA_DIR/sbin/$MOD_LS/
+check_errs $? "failed to mv files from $SCRIPT_DIR/install_lsws_plesk to $PSA_DIR/sbin/$MOD_LS/"
+
+mv $SCRIPT_DIR/lsws_cmd $PSA_DIR/sbin/$MOD_LS/
+check_errs $? "failed to mv files from $SCRIPT_DIR/lsws_cmd to $PSA_DIR/sbin/$MOD_LS/"
+
+mv $SCRIPT_DIR/lsws_func $PSA_DIR/sbin/$MOD_LS/
+check_errs $? "failed to mv files from $SCRIPT_DIR/lsws_func to $PSA_DIR/sbin/$MOD_LS/"
+
+mv $SCRIPT_DIR/pleskInstall.sh $PSA_DIR/sbin/$MOD_LS/
+check_errs $? "failed to mv files from $SCRIPT_DIR/pleskInstall.sh to $PSA_DIR/sbin/$MOD_LS/"
+
+mv $SCRIPT_DIR/uninstall_lsws_plesk $PSA_DIR/sbin/$MOD_LS/
+check_errs $? "failed to mv files from $SCRIPT_DIR/uninstall_lsws_plesk to $PSA_DIR/sbin/$MOD_LS/"
+
+chmod 700 $PSA_DIR/sbin/$MOD_LS/*
+check_errs $? "failed to chmod scripts under $PSA_DIR/sbin/$MOD_LS/"
+
+cd $PSA_DIR/bin
+check_errs $? "cannot enter $PSA_DIR/bin"
+
+mkdir -p $MOD_LS
+check_errs $? "failed to create dir $PSA_DIR/bin/$MOD_LS"
+
+cd $MOD_LS
+
+ln -sf ../../../sbin/mod_wrapper install_lsws_plesk
+ln -sf ../../../sbin/mod_wrapper lsws_cmd
+ln -sf ../../../sbin/mod_wrapper uninstall_lsws_plesk
+
+chmod a+x *
+check_errs $? "failed to chmod scripts under $PSA_DIR/bin/$MOD_LS/"
+
+
+echo "scripts installed successfully"

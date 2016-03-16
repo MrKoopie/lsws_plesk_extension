@@ -1,0 +1,593 @@
+#!/bin/sh
+
+##########################################################
+# LiteSpeed Web Server Plugin for Plesk Panel
+# @Author:   LiteSpeed Technologies, Inc. (http://www.litespeedtech.com)
+# @Copyright: (c) 2013-2016
+##########################################################
+
+#
+# Init Common Variables
+#
+init_var()
+{
+    OS=`uname -s`
+    if [ "x$OS" = "xFreeBSD" ] || [ "x$OS" = "xDarwin" ] ; then
+	PS_CMD="ps -ax"
+    else
+	PS_CMD="ps -ef"
+    fi
+    if [ "x$OS" = "xFreeBSD" ] ; then
+        LSWS_CTLCMD="/usr/local/etc/rc.d/lsws.sh"
+	AP_CTLCMD="/usr/local/etc/rc.d/httpd"
+    else
+        LSWS_CTLCMD="/sbin/service lsws"
+	AP_CTLCMD="/sbin/service httpd"
+    fi
+
+
+    LSWS_PIDFILE=/tmp/lshttpd/lshttpd.pid
+    AP_PIDFILE=/var/run/httpd/httpd.pid
+    SERIAL_FILE=${LSWS_HOME}/conf/serial.no
+    LICENSE_KEY_FILE=${LSWS_HOME}/conf/license.key
+    TRIAL_KEY_FILE=${LSWS_HOME}/conf/trial.key
+    CONF=${LSWS_HOME}/conf/httpd_config.xml
+    LSWSBIN=${LSWS_HOME}/bin/lshttpd
+    LSWS_SWITCH_FLAG=${LSWS_HOME}/admin/tmp/.switched2lsws
+    AP_PROC=httpd
+
+    if [ -e /etc/debian_version ]; then
+        LSWS_CTLCMD="/usr/sbin/service lsws"
+        AP_CTLCMD="/usr/sbin/service apache2"
+        AP_PROC=apache2
+        source /etc/apache2/envvars 2>/dev/null
+        if [ $? != 0 ]; then
+            . /etc/apache2/envvars
+        fi
+        AP_PIDFILE=$APACHE_PID_FILE
+    fi
+}
+
+err_exit()
+{
+  if [ "${1}" -ne "0" ] ; then
+    echo "**ERROR** ${2}" 
+    exit ${1}
+  fi
+}
+
+msg_exit()
+{
+    echo "${2}"
+    exit ${1}
+}
+
+cat_file()
+{
+    if [ -e "$1" ] ; then
+	cat "$1"
+	exit 0
+    else
+        echo ""
+        exit 1
+    fi
+
+}
+
+detect_lsws_pid()
+{
+    LSPID=0
+
+    if [ -f $LSWS_PIDFILE ] ; then
+	FPID=`cat $LSWS_PIDFILE`
+	if [ "x$FPID" != "x" ] ; then
+            PL=`$PS_CMD | grep -w 'lshttpd\|litespeed' | grep -v grep | grep -w $FPID`
+            if [ "x$PL" != "x" ] ; then
+		LSPID=$FPID
+            fi
+	fi
+    fi
+}
+
+detect_ap_pid()
+{
+    APPID=0
+
+    if [ -f $AP_PIDFILE ] ; then
+        FPID=`cat $AP_PIDFILE`
+        if [ "x$FPID" != "x" ] ; then
+            PL=`$PS_CMD | grep -w $FPID | grep ${AP_PROC} | grep -v grep | grep -v lscgid`
+            if [ "x$PL" != "x" ] ; then
+                APPID=$FPID
+            fi
+        fi
+    fi
+}
+
+CheckNginx()
+{
+    PSOUTPUT=`$PS_CMD | grep nginx | grep master`
+}
+
+#
+# start LiteSpeed
+#
+start_lsws()
+{
+    $LSWS_CTLCMD start 2>&1
+
+    RETRY=30
+    LSPID=0
+
+    while [ $RETRY -gt 0 ] && [ $LSPID -eq 0 ]
+    do
+        RETRY=$(($RETRY-1))
+        sleep 1
+        detect_lsws_pid
+    done
+}
+
+stop_lsws()
+{
+    $LSWS_CTLCMD stop
+
+    RETRY=30
+    LSPID=1
+
+    while [ $RETRY -gt 0 ] && [ $LSPID -ne 0 ]
+    do
+        RETRY=$(($RETRY-1))
+        sleep 1
+        detect_lsws_pid
+    done
+
+    if [ $LSPID -eq 0 ] ; then
+	killall -9 lshttpd
+	killall -9 litespeed
+	echo "LiteSpeed Stopped."
+    else
+	echo "LiteSpeed is still running. Fail to stop within 30 secs."
+	echo "Will use killall command to stop"
+	
+	killall -9 lshttpd
+	killall -9 litespeed
+	sleep 1
+	
+	detect_lsws_pid
+
+	if [ $LSPID -eq 0 ] ; then
+	    echo "LiteSpeed Stopped."
+	else
+	    echo "LiteSpeed is still running. Fail to stop using kill command."
+	fi
+    fi
+
+}
+
+stop_apache()
+{
+    $AP_CTLCMD stop
+
+    RETRY=30
+    APPID=1
+
+    while [ $RETRY -gt 0 ] && [ $APPID -ne 0 ]
+    do
+        RETRY=$(($RETRY-1))
+        sleep 1
+        detect_ap_pid
+    done
+
+   if [ $APPID -eq 0 ] ; then
+	echo "Apache Stopped."
+   else
+	echo "Apache is still running. Fail to stop within 30 secs."
+	echo "Will use killall command to stop"
+	
+	killall -9 ${AP_PROC}
+	sleep 1
+	
+	detect_ap_pid
+
+	if [ $APPID -eq 0 ] ; then
+	    echo "Apache Stopped."
+	else
+	    echo "Apache is still running. Fail to stop using kill command."
+	fi
+    fi
+}
+
+change_port_offset()
+{
+    PORT_OFFSET=$1
+
+    if [ ! -f "$CONF" ] ; then
+	err_exit 1 "$0: invalid conf file directory!"
+    fi
+
+    cp -f $CONF $CONF.orig
+
+    sed -e "s/<apachePortOffset>.*<\/apachePortOffset>/<apachePortOffset>$PORT_OFFSET<\/apachePortOffset>/" "$CONF".orig > "$CONF"
+
+    err_exit $? "$0: sed command error, please try to modify apache port offset manually from config file $CONF"
+    
+    /bin/rm -f "$CONF".orig
+}
+
+SwitchToLiteSpeed()
+{
+    change_port_offset 0
+    
+    stop_apache
+
+    detect_lsws_pid
+
+    apache_wrapper 0
+
+    start_lsws
+
+    if [ $LSPID -gt 0 ] ; then
+	msg_exit 0 "LiteSpeed started successfully."
+    fi
+
+    echo "LiteSpeed is not up within 30 secs, try again by removing /tmp/lshttpd/."
+
+    killall -9 lshttpd
+    killall -9 litespeed
+    rm -rf /tmp/lshttpd
+
+    start_lsws
+
+    if [ $LSPID -gt 0 ] ; then
+        msg_exit 0 "LiteSpeed started successfully."
+    else
+        apache_wrapper 1
+        err_exit 1 "LiteSpeed is not up within 60 secs, please check the error log and try again."
+    fi
+
+}
+
+apache_wrapper()
+{
+    RESTORE=$1
+
+    INIT_DIR=""
+    for path in /etc/init.d /etc/rc.d/init.d
+    do
+        if [ "${INIT_DIR}" = "" ]; then
+            if [ -d "$path" ] && [ -e "${path}/${AP_PROC}" ] ; then
+                INIT_DIR=$path
+            fi
+        fi
+    done
+
+    # use systemd if possible, need to use same method as apache
+    SYSTEMDDIR=""
+    SYSTEMDEXIST=0
+
+    for path in /etc/systemd/system /usr/lib/systemd/system
+    do
+            if [ -d "$path" ] ; then
+                SYSTEMDEXIST=1
+            fi
+            if [ "${SYSTEMDDIR}" = "" ] ; then
+                    if [ -d "$path" ] && [ -e ${path}/${AP_PROC}.service ] ; then
+                            SYSTEMDDIR=$path
+                    fi
+            fi
+    done
+
+    if [ $RESTORE -eq "1" ] ; then
+        # restore Apache binary Files
+        if [ -f "/usr/sbin/${AP_PROC}_ls_bak" ] ; then
+            mv -f /usr/sbin/${AP_PROC}_ls_bak /usr/sbin/${AP_PROC}
+        fi
+
+        # restore rc file
+        if [ "${SYSTEMDDIR}" != "" ] && [  -e "${SYSTEMDDIR}/${AP_PROC}.service.ls_bak" ]  ; then
+            mv -f ${SYSTEMDDIR}/${AP_PROC}.service.ls_bak ${SYSTEMDDIR}/${AP_PROC}.service
+            systemctl daemon-reload
+        fi
+
+        if [ "${INIT_DIR}" != "" ] && [ -e "${INIT_DIR}/${AP_PROC}.ls_bak" ]  ; then
+            mv -f ${INIT_DIR}/${AP_PROC}.ls_bak ${INIT_DIR}/${AP_PROC}
+            if [ $SYSTEMDEXIST -eq 1 ] ; then
+                systemctl daemon-reload
+            fi
+        fi
+
+        if [ -f "${LSWS_SWITCH_FLAG}" ] ; then
+            /bin/rm -f "${LSWS_SWITCH_FLAG}"
+        fi
+
+    else
+
+        # add rc wrapper
+        if [ "${SYSTEMDDIR}" != "" ]  ; then
+            if  [ ! -e "${SYSTEMDDIR}/${AP_PROC}.service.ls_bak" ] ; then
+                mv -f ${SYSTEMDDIR}/${AP_PROC}.service ${SYSTEMDDIR}/${AP_PROC}.service.ls_bak
+            fi
+            ln -sf ${SYSTEMDDIR}/lshttpd.service ${SYSTEMDDIR}/${AP_PROC}.service
+            systemctl daemon-reload
+        fi
+
+        if [ "${INIT_DIR}" != "" ] ; then
+            if [ ! -e ${INIT_DIR}/${AP_PROC}.ls_bak ] ; then
+                mv -f ${INIT_DIR}/${AP_PROC} ${INIT_DIR}/${AP_PROC}.ls_bak
+            fi
+            ln -sf ./lsws ${INIT_DIR}/${AP_PROC}
+            if [ $SYSTEMDEXIST -eq 1 ] ; then
+                systemctl daemon-reload
+            fi
+        fi
+        
+        # set flag
+        touch "${LSWS_SWITCH_FLAG}"
+
+    fi
+}
+
+SwitchToApache()
+{
+    stop_lsws
+
+    if [ $LSPID -gt 0 ] ; then
+	err_exit 1 "Abort."
+    fi
+
+    # if running, stop first
+    detect_ap_pid
+    if [ $APPID -gt 0 ] ; then
+        stop_apache
+    fi
+
+    # restore Apache Files, wrapper needs to run before Apache start
+    apache_wrapper 1
+
+    # wait 1 sec before start apache
+    sleep 1
+    
+    $AP_CTLCMD start 2>&1
+
+    RETRY=30
+    APPID=0
+
+    while [ $RETRY -gt 0 ] && [ $APPID -eq 0 ]
+    do
+	detect_ap_pid
+        RETRY=$(($RETRY-1))
+
+        sleep 1
+    done
+     
+    if [ $APPID -ne 0 ] ; then
+	msg_exit 0 "Apache started successfully."
+    else
+	err_exit 1 "Apache is not up within 30 secs, please check the log file."
+    fi
+
+}
+
+GetSerial()
+{
+    if [ -f "$SERIAL_FILE" ] ; then
+	cat "$SERIAL_FILE"
+    elif [ -f "$TRIAL_KEY_FILE" ] ; then
+	echo "TRIAL"
+    else
+	echo "NO SERIAL FOUND"
+    fi
+
+}
+
+CheckLicense()
+{
+   if [ -f "$SERIAL_FILE" ] ; then
+        if [ ! -e "$LICENSE_KEY_FILE" ] ; then
+            $LSWSBIN -r 2>&1
+        fi
+        if [ ! -e "$LICENSE_KEY_FILE" ] ; then
+            err_exit 1 "Failed to find a license key file, abort!"
+        else
+            $LSWSBIN -V 2>&1
+        fi
+
+   elif [ -f "$TRIAL_KEY_FILE" ] ; then
+       $LSWSBIN -V 2>&1
+   else
+       err_exit 1 "Failed to find serial.no or trial key file, abort!"
+   fi
+
+}
+
+restore_exit()
+{
+    if [ "$SERIAL" = "TRIAL" ] ; then
+	if [ -f "${TRIAL_KEY_FILE}" ] ; then
+	    rm -rf ${TRIAL_KEY_FILE}
+	    echo "   removed retrieved trial.key"
+	fi
+    else
+	if [ -f "${SERIAL_FILE}" ] ; then
+	    rm -rf "${SERIAL_FILE}"
+	    echo "   removed uploaded serial.no"
+	fi
+	if [ -f "${LICENSE_KEY_FILE}" ] ; then
+	    rm -rf "${LICENSE_KEY_FILE}"
+	    echo "   removed the new license.key"
+	fi
+	
+    fi
+
+    if [ "x" != "x$BACKUP_SERIAL_NO" ] ; then
+	mv ${BACKUP_SERIAL_NO} ${SERIAL_FILE}
+        echo "   restored the original serial.no from ${BACKUP_SERIAL_NO}"
+    fi
+
+    if [ "x" != "x${BACKUP_LICENSE_KEY}" ] ; then
+	mv ${BACKUP_LICENSE_KEY} ${LICENSE_KEY_FILE}
+        echo "   restored the original license.key from ${BACKUP_LICENSE_KEY}"
+    fi
+
+    if [ "x" != "x${BACKUP_TRIAL_KEY}" ] ; then
+	mv ${BACKUP_TRIAL_KEY} ${TRIAL_KEY_FILE}
+        echo "   restored the original trial.key from ${BACKUP_TRIAL_KEY}"
+    fi
+
+    err_exit ${1} ${2}
+}
+
+SwitchLicense()
+{
+    SERIAL=$1
+
+    echo "Back up current license files under ${LSWS_HOME}/conf/ ..."
+
+    if [ -f "${SERIAL_FILE}" ] ; then
+	BACKUP_SERIAL_NO=${SERIAL_FILE}.backup.$$ 
+	mv ${SERIAL_FILE} ${BACKUP_SERIAL_NO}
+	err_exit $? "fail to backup current serial.no"
+	echo "... saved current serial.no to ${BACKUP_SERIAL_NO}"
+    fi
+
+    if [ -f "${LICENSE_KEY_FILE}" ] ; then
+	BACKUP_LICENSE_KEY=${LICENSE_KEY_FILE}.backup.$$
+	mv ${LICENSE_KEY_FILE} ${BACKUP_LICENSE_KEY}
+	err_exit $? "fail to backup current license.key"
+	echo "... saved current license.key to ${BACKUP_LICENSE_KEY}"
+    fi
+
+    
+    if [ "$SERIAL" = "TRIAL" ] ; then
+	echo "Trying to switch to a trial license ..."
+
+        if [ ${OS} = "FreeBSD" ]; then
+            fetch -q -o ${TRIAL_KEY_FILE} http://license.litespeedtech.com/reseller/trial.key
+        else
+            wget -q --output-document=${TRIAL_KEY_FILE} http://license.litespeedtech.com/reseller/trial.key
+        fi
+
+	if [ $? -ne 0 ] ; then
+	    echo "Failed to retrieve a trial license"
+	    restore_exit 1 "Aborted!"
+	fi
+	
+    else
+
+	if [ -f "${TRIAL_KEY_FILE}" ] ; then
+	    BACKUP_TRIAL_KEY=${TRIAL_KEY_FILE}.backup.$$
+	    mv ${TRIAL_KEY_FILE} ${BACKUP_TRIAL_KEY}
+	    err_exit $? "fail to back up current trial.key"
+	    echo "... saved current trial.key to ${BACKUP_TRIAL_KEY}"
+	fi
+
+	echo "Trying to switch to a new production license ..."
+
+	echo "$SERIAL" > ${SERIAL_FILE}
+	if [ $? -eq 0 ] ; then
+	    echo "... Saved serial number \"$SERIAL\" to ${SERIAL_FILE}"
+	else
+	    echo "Failed to save serial number to ${SERIAL_FILE}!"
+	    restore_exit 1 "Aborted!"
+	fi
+
+        # need to retrieve new license file
+	echo "... Serial number is available."
+	echo "... Contacting licensing server for license key ..."
+
+	REGISTER_OUTPUT=`$LSWSBIN -r 2>&1`
+
+	if [ $? -eq 0 ] ; then
+	    echo "... License key received: $REGISTER_OUTPUT"
+	else
+	    echo "... failed to retrieve license key, please double check your serial number: $REGISTER_OUTPUT."
+	    restore_exit 1 "Aborted!"
+	fi
+
+    fi
+
+    TEST_RESULT=`$LSWSBIN -t 2>&1`
+
+    if [ $? -ne 0 ] ; then
+	echo "Failed to switch to the new license."
+	echo "... $TEST_RESULT"
+	restore_exit 1 "Aborted!"
+    else
+	echo "Successfully switched to the new license."
+	echo "... $TEST_RESULT"
+	echo ""
+	echo "*** Your old licenses have been backed up in the same directory."
+	echo ""
+
+	detect_lsws_pid
+
+	if [ $LSPID gt 0 ] ; then
+	    echo "Restarting LiteSpeed to apply the new license."
+	    ${LSWS_CTLCMD} restart
+	fi
+
+    fi
+
+}
+
+TransferLicense()
+{
+    echo "License status before migration:"
+    $LSWSBIN -m 2>&1
+    if [ $? -ne 0 ] ; then
+	err_exit 1 "Failed to migrate current license."
+    fi
+
+    echo "Successfully migrated current license."
+    echo "License status after migration:"
+    CheckLicense
+
+    detect_lsws_pid
+
+    if [ $LSPID gt 0 ] ; then
+	echo "Restarting LiteSpeed to apply the new license."
+	${LSWS_CTLCMD} restart
+    fi
+
+}
+
+GetVersion()
+{
+    cat_file "$LSWS_HOME/VERSION"
+}
+
+GetNewVersion()
+{
+    cat_file "$LSWS_HOME/autoupdate/release"
+}
+
+GetInstalledVersions()
+{
+    ls ${LSWS_HOME}/bin/lswsctrl.*
+}
+
+GetAdminConf()
+{
+    cat_file "$LSWS_HOME/admin/conf/admin_config.xml"
+}
+
+GetApachePortOffset()
+{
+    grep apachePortOffset "$CONF"
+}
+
+VersionUp()
+{
+    $LSWS_HOME/admin/misc/lsup.sh -f -v $1 2>&1
+}
+
+VersionSwitch()
+{
+    $LSWS_HOME/admin/misc/mgr_ver.sh $1 2>&1
+}
+
+VersionDel()
+{
+    $LSWS_HOME/admin/misc/mgr_ver.sh -d $1 2>&1
+}
+

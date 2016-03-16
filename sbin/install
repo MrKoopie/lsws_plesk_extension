@@ -1,0 +1,23 @@
+#!/bin/sh
+
+##########################################################
+# LiteSpeed Web Server Plugin for Plesk Panel
+# @Author:   LiteSpeed Technologies, Inc. (http://www.litespeedtech.com)
+# @Copyright: (c) 2013-2015
+##########################################################
+
+set -e
+
+# detect PSA_BASE
+if [ -e "/opt/psa/version" ] ; then
+    PSA_BASE="/opt/psa"
+elif [ -e "/usr/local/psa/version" ] ; then
+    PSA_BASE="/usr/local/psa"
+else
+    PSA_BASE="/usr/local/psa"
+fi
+
+sh $PSA_BASE/admin/plib/modules/litespeed/scripts/install_scripts
+
+rm $PSA_BASE/admin/plib/modules/litespeed/scripts/install_scripts
+
