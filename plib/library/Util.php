@@ -2,7 +2,7 @@
 /********************************************
 * LiteSpeed Web Server Plugin for Plesk Panel
 * @Author:   LiteSpeed Technologies, Inc. (https://www.litespeedtech.com)
-* @Copyright: (c) 2013-2015
+* @Copyright: (c) 2013-2016
 *********************************************/
 
 class Modules_Litespeed_Util
@@ -330,28 +330,6 @@ class Modules_Litespeed_Util
 		return $errors;
 	}
 
-	public function HasRPM()
-	{
-		$rpm = '';
-		// only CentOS 5&6&7
-		$s = file_get_contents('/etc/redhat-release');
-		if ($s != FALSE) {
-			if (preg_match('/release (\d+)\.\d+/', $s, $m)) {
-				if ($m[1] == '5' || $m[1] == '6' || $m[1] == '7')
-					$rpm = "http://rpms.litespeedtech.com/centos/litespeed-repo-1.1-1.el{$m[1]}.noarch.rpm";
-			}
-		}
-		return $rpm;
-	}
-
-	public function GetDefaultLsphpVersion()
-	{
-		$v = phpversion();
-		$r = explode('.', $v);
-		$lsphpver = "lsphp{$r[0]}{$r[1]}";
-		return $lsphpver;
-	}
-
 	public function InstallLSWS($input, &$output)
 	{
 		$install_cmd = CGI_DIR . 'install_lsws_plesk '
@@ -361,9 +339,7 @@ class Modules_Litespeed_Util
 			. $input['php_suexec'] . ' '
 			. escapeshellarg($input['admin_login']) . ' '
 			. escapeshellarg($input['admin_pass']) . ' '
-			. escapeshellarg($input['admin_email']) . ' '
-			. escapeshellarg($input['php_version']) . ' '
-			. escapeshellarg($input['rpm']);
+			. escapeshellarg($input['admin_email']) ;
 
 		$this->exec_cmd($install_cmd, $output, $return_var);
 

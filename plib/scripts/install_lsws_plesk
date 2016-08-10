@@ -3,7 +3,7 @@
 ##########################################################
 # LiteSpeed Web Server Plugin for Plesk Panel
 # @Author:   LiteSpeed Technologies, Inc. (http://www.litespeedtech.com)
-# @Copyright: (c) 2013-2014
+# @Copyright: (c) 2013-2016
 ##########################################################
 
 check_errs()
@@ -14,7 +14,7 @@ check_errs()
   fi
 }
 
-if [ $# -ne 9 ] ; then
+if [ $# -ne 7 ] ; then
     check_errs 1 "Illegal parameters = $# !"
 fi
 
@@ -26,8 +26,6 @@ PHP_SUEXEC=$4
 ADMIN_LOGIN=$5
 ADMIN_PASS=$6
 ADMIN_EMAIL=$7
-LSPHP=$8
-RPMREPO=$9
 
 CUR_DIR=`pwd`
 SCRIPT_DIR=`dirname "$0"`
@@ -160,20 +158,20 @@ cd "$WGET_TEMP/$LOCAL_DIR/"
 sh ./pleskInstall.sh $LSWS_HOME $PORT_OFFSET $PHP_SUEXEC "$ADMIN_LOGIN" "$ADMIN_PASS" "$ADMIN_EMAIL" 2>&1
 check_errs $? "Failed to install, abort!"
 
-if [ "x$RPMREPO" != "x" ] ; then
-    rpm -ivh $RPMREPO 2>&1
-    yum -y install $LSPHP 2>&1
-    yum -y install $LSPHP-common $LSPHP-mysql $LSPHP-mcrypt $LSPHP-xml $LSPHP-gd $LSPHP-pdo $LSPHP-soap $LSPHP-mbstring $LSPHP-process $LSPHP-imap $LSPHP-bcmath $LSPHP-intl --skip-broken 2>&1
-    #yum -y install $LSPHP-* --skip-broken 2>&1
-
-    if [ -e "/usr/local/lsws/$LSPHP/bin/lsphp" ] ; then
-        echo "Installed $LSPHP from rpm repository $RPMREPO"
-        ln -sf /usr/local/lsws/$LSPHP/bin/lsphp $LSWS_HOME/fcgi-bin/$LSPHP
-        ln -sf $LSWS_HOME/fcgi-bin/$LSPHP $LSWS_HOME/fcgi-bin/lsphp5
-    else
-        check_errs 1 "Failed to install $LSPHP from rpm repository $RPMREPO"
-    fi
+if [ ! -e /opt/plesk/php/5.6/bin/lsphp ]; then
+    /usr/sbin/plesk sbin autoinstaller --select-product-id plesk --select-release-current  --install-component php5.6
 fi
+
+if [ ! -e /usr/bin/lsphp ]; then
+     echo "Your OS vendor equivalant lsphp for LiteSpeed is not set. We set it to plesk lsphp 5.6."
+     echo "cp /opt/plesk/php/5.6/bin/lsphp /usr/bin/lsphp"
+     cp /opt/plesk/php/5.6/bin/lsphp /usr/bin/lsphp
+     if [ -e /usr/bin/lsphp ]; then
+       echo "ln -sf /usr/bin/lsphp /usr/local/lsws/fcgi-bin/lsphp5"    
+       ln -sf /usr/bin/lsphp /usr/local/lsws/fcgi-bin/lsphp5    
+     fi
+fi 
+ 
 
 if [ -f "/etc/cagefs/cagefs.mp" ] ; then
 # cagefs installed first, need update mount point

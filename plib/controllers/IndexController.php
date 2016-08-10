@@ -20,7 +20,7 @@ class IndexController extends pm_Controller_Action
 		    else
 		    	pm_Settings::set('LSWS_HOME', NULL);
 		}
-		define('MODULE_VERSION', '1.2.4');
+		define('MODULE_VERSION', '1.2.5');
 
 		$this->view->dispatcher = new Modules_Litespeed_View($this->view);
 		$this->util = new Modules_Litespeed_Util();
@@ -298,12 +298,6 @@ class IndexController extends pm_Controller_Action
 
 	private function install_lsws($step)
 	{
-		$info['rpm'] = $this->util->HasRPM();
-   		$info['php_version'] = $this->util->GetDefaultLsphpVersion();
-        if ($info['rpm'] != '') {
-            $info['php_options'] = array('lsphp53' => '5.3', 'lsphp54' => '5.4', 'lsphp55' => '5.5', 'lsphp56' => '5.6');
-        }
-
 		if ($step == 0) {
 			// populate default
 			$info['license_agree'] = '';
@@ -311,7 +305,7 @@ class IndexController extends pm_Controller_Action
 			$info['serial_no'] = '';
 			$info['lsws_home_input'] = '/usr/local/lsws';
 			$info['port_offset'] = '0';
-			$info['php_suexec'] = '';
+			$info['php_suexec'] = 2; // enable in user home dir
 			$info['admin_email'] = 'root@localhost';
 			$info['admin_login'] = 'admin';
 			$info['admin_pass'] = '';
@@ -323,13 +317,10 @@ class IndexController extends pm_Controller_Action
 			$info['serial_no'] = $this->util->get_request_var('serial_no');
 			$info['lsws_home_input'] = $this->util->get_request_var('lsws_home_input');
 			$info['port_offset'] = $this->util->get_request_var('port_offset');
-			$info['php_suexec'] = ($this->util->get_request_var('php_suexec') == 'enable')? 1: 0;
+			$info['php_suexec'] = ($this->util->get_request_var('php_suexec') == 'enable')? 2: 0;
 			$email = $this->util->get_request_var('admin_email');
 			$emails = preg_split("/, /", $email, -1, PREG_SPLIT_NO_EMPTY);
 			$info['admin_email'] = implode(', ', $emails);
-            if ($info['rpm'] != '') {
-                $info['php_version'] = $this->util->get_request_var('php_version');
-            }
 
 			$info['admin_login'] = $this->util->get_request_var('admin_login');
 			$info['admin_pass'] = $this->util->get_request_var('admin_pass');

@@ -2,7 +2,7 @@
 /********************************************
 * LiteSpeed Web Server Plugin for Plesk Panel
 * @Author:   LiteSpeed Technologies, Inc. (https://www.litespeedtech.com)
-* @Copyright: (c) 2013-2015
+* @Copyright: (c) 2013-2016
 *********************************************/
 
 
@@ -226,7 +226,7 @@ If successful, remove the installation script:
 
 		}
 		$buf .= '<p></p>
-<p style="margin-top:30px;color:#a0a0a0;text-align:right;font-size:11px">This extension is developed by LiteSpeed Technologies. Odin is not responsible for
+<p style="margin-top:30px;color:#a0a0a0;text-align:right;font-size:11px">This extension is developed by LiteSpeed Technologies. Plesk is not responsible for
 support.<br/>Please contact LiteSpeed at litespeedtech.com for all related questions and issues.<br/><br/>LiteSpeed Web Server Extension for Plesk v'
 		. MODULE_VERSION . ' </p>
 
@@ -545,7 +545,7 @@ support.<br/>Please contact LiteSpeed at litespeedtech.com for all related quest
 					'It is recommended that you run LiteSpeed in parallel first, so you can fully test it before switching to LiteSpeed.');
 		$buf .= $this->form_row('Port offset: ', $input, $info['error']['port_offset'], $hints);
 
-		$input = $this->input_checkbox('php_suexec', 'enable', ($info['php_suexec']=='enable'));
+		$input = $this->input_checkbox('php_suexec', 'enable', ($info['php_suexec'] != ''));
 		$hints = 'Recommended for shared hosting.';
 		$buf .= $this->form_row('Enable PHP SuEXEC:', $input, NULL, $hints);
 
@@ -565,24 +565,6 @@ support.<br/>Please contact LiteSpeed at litespeedtech.com for all related quest
 		$input = $this->input_password('admin_pass1', $info['admin_pass1']);
 		$buf .= $this->form_row('Retype password:', $input, $info['error']['admin_pass1']);
 
-		$buf .= $this->section_title('After Installation Notes (Important)');
-		$warn[] = '<p>Need to install a matching PHP with LSAPI.</p>';
-
-		if ($info['rpm'] != NULL) {
-		$warn[] = '<p>For CentOS 5/6/7, a basic RPM package for is available. This package contains all commonly used options and <strong>will be installed automatically</strong>.
-            This package is enough for most CentOS users, but if your applications require special options, you will need to install a new PHP via RPM or compile a custom build of the PHP binary.</p>';
-            $input = $this->input_select('php_version', $info['php_options'], $info['php_version']);
-            $buf .= $this->form_row('Select your PHP version:', $input);
-		}
-		else {
-			$warn[] = '<p>You will need to install a new PHP via RPM or compile a custom build of the PHP binary.</p>';
-		}
-
-        $warn[] = '<p class="hint"><a href="https://www.litespeedtech.com/support/wiki/doku.php/litespeed_wiki:php:rpm" target="_blank">Guide</a> to installing via RPM &nbsp;&nbsp;&nbsp;
-                <a href="https://www.litespeedtech.com/support/wiki/doku.php/litespeed_wiki:php:lsapi" target="_blank">Guide</a> to compiling PHP via WebAdmin console</p>';
-
-		$buf .= $this->warning_panel_mesg('Install PHP for LiteSpeed Web Server (PHP with LSAPI)', $warn);
-
 		$buf .= $this->button_panel_cancel_next('Cancel', 'Install');
 		$this->bufs[] = $buf;
 	}
@@ -599,21 +581,6 @@ support.<br/>Please contact LiteSpeed at litespeedtech.com for all related quest
 		else {
 			$title = 'LiteSpeed installed successfully';
 			$buf .= $this->info_panel_mesg($title, $info['output']);
-
-			if ($info['rpm'] != NULL) {
-				$warn[] = '<p><strong>For CentOS 5/6/7, an RPM package for ' . $info['php_version'] . ' is available.
-                    This package contains all commonly used options and was installed automatically.</strong> This package is enough for most CentOS users,
-                    but if your applications require special options, you will need to install a new PHP via RPM or compile a custom build of the PHP binary.</p>';
-			}
-			else {
-				$warn[] = '<p>You will need to install a new PHP via RPM or compile a custom build of the PHP binary.</p>';
-			}
-
-            $warn[] = '<p class="hint"><a href="https://www.litespeedtech.com/support/wiki/doku.php/litespeed_wiki:php:rpm" target="_blank">Guide</a> to installing via RPM &nbsp;&nbsp;&nbsp;
-                <a href="https://www.litespeedtech.com/support/wiki/doku.php/litespeed_wiki:php:lsapi" target="_blank">Guide</a> to compiling PHP via WebAdmin console</p>';
-
-			$buf .= $this->warning_panel_mesg('Install PHP for LiteSpeed Web Server (PHP with LSAPI)', $warn);
-
 		}
 		$buf .= $this->button_panel_back('OK');
 		$this->bufs[] = $buf;
